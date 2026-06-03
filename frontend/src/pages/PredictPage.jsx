@@ -3,8 +3,8 @@ import axios from 'axios'
 import { Activity, User, Zap, AlertTriangle, CheckCircle, XCircle, RefreshCw, Send, Info } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
-// const API = 'https://jeetusingh.pythonanywhere.com'
-const API = 'http://localhost:5000'
+const API = 'https://jeetusingh.pythonanywhere.com'
+// const API = 'http://localhost:5000'
 
 const FIELDS = [
   { key: 'age',      label: 'Age',                    placeholder: '63',  type: 'number', tip: 'Patient age in years' },
@@ -54,9 +54,15 @@ export default function PredictPage() {
       const { data } = await axios.post(`${API}/predict`, payload)
       if (data.success) setResult(data.data)
       else setError(data.error)
-    } catch {
-      setError('Cannot connect to Flask API. Make sure python app.py is running on port 5000.')
-    }
+    } 
+    // catch {
+    //   setError('Cannot connect to Flask API. Make sure python app.py is running on port 5000.')
+    // }
+    // NEW
+catch (err) {
+  console.error(err)
+  setError('Cannot connect to deployed Flask API.')
+}
     setLoading(false)
   }
 
