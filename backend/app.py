@@ -4,75 +4,191 @@ import joblib
 import numpy as np
 import os
 
+# ==================================================
+# Flask App Setup
+# ==================================================
+
 app = Flask(__name__)
-CORS(app)  # Allow React frontend to talk to Flask
+CORS(app)
 
-# Load model and scaler
-MODEL_PATH  = '../models/heart_model.pkl'
-SCALER_PATH = '../models/scaler.pkl'
+# ==================================================
+# Load Model and Scaler
+# ==================================================
 
-model  = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-print("✅ Model and scaler loaded successfully!")
+MODEL_PATH = os.path.abspath(
+    os.path.join(BASE_DIR, "..", "models", "heart_model.pkl")
+)
 
-# ── Feature names (same order as training) ──────────────────
-FEATURES = ['age', 'sex', 'cp', 'trestbps', 'chol', 'fbs',
-            'restecg', 'thalach', 'exang', 'oldpeak',
-            'slope', 'ca', 'thal']
+SCALER_PATH = os.path.abspath(
+    os.path.join(BASE_DIR, "..", "models", "scaler.pkl")
+)
 
-# ────────────────────────────────────────────────────────────
-@app.route('/', methods=['GET'])
+print("=" * 50)
+print("BASE_DIR:", BASE_DIR)
+print("MODEL_PATH:", MODEL_PATH)
+print("SCALER_PATH:", SCALER_PATH)
+print("=" * 50)
+
+try:
+    model = joblib.load(MODEL_PATH)
+    scaler = joblib.load(SCALER_PATH)
+
+    print("✅ Model and scaler loaded successfully!")
+
+except Exception as e:
+    print("❌ Error loading model/scaler:", str(e))
+    model = None
+    scaler = None
+
+# ==================================================
+# Features List
+# ==================================================
+
+FEATURES = [
+    "age",
+    "sex",
+    "cp",
+    "trestbps",
+    "chol",
+    "fbs",
+    "restecg",
+    "thalach",
+    "exang",
+    "oldpeak",
+    "slope",
+    "ca",
+    "thal"
+]
+
+# ==================================================
+# Home Route
+# ==================================================
+
+@app.route("/")
 def home():
     return jsonify({
-        'message': 'Heart Disease Prediction API is running!',
-        'status':  'OK'
+        "message": "Heart Disease Prediction API is running!",
+        "status": "OK"
     })
 
-# ────────────────────────────────────────────────────────────
-@app.route('/predict', methods=['POST'])
+# ==================================================
+# Health Check Route
+# ==================================================
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "healthy",
+        "model_loaded": model is not None,
+        "scaler_loaded": scaler is not None
+    })
+
+# ==================================================
+# Model Info Route
+# ==================================================
+
+@app.route("/model-info")
+def model_info():
+
+    if model is None:
+        return jsonify({
+            "success": False,
+            "error": "Model not loaded"
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "model_type": type(model).__name__,
+        "features": FEATURES,
+        "total_features": len(FEATURES)
+    })
+
+# ==================================================
+# Prediction Route
+# ==================================================
+
+@app.route("/predict", methods=["POST"])
 def predict():
+
     try:
+
+        if model is None or scaler is None:
+            return jsonify({
+                "success": False,
+                "error": "Model or scaler not loaded"
+            }), 500
+
         data = request.get_json()
 
-        # Extract features in correct order
-        features = [float(data[f]) for f in FEATURES]
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No input data provided"
+            }), 400
+
+        features = []
+
+        for feature in FEATURES:
+
+            if feature not in data:
+                return jsonify({
+                    "success": False,
+                    "error": f"Missing feature: {feature}"
+                }), 400
+
+            features.append(float(data[feature]))
+
         features_array = np.array(features).reshape(1, -1)
 
-        # Scale input
         features_scaled = scaler.transform(features_array)
 
-        # Predict
-        prediction = model.predict(features_scaled)[0]
+        prediction = int(model.predict(features_scaled)[0])
+
         probability = model.predict_proba(features_scaled)[0]
 
+        disease_probability = float(probability[1]) * 100
+        no_disease_probability = float(probability[0]) * 100
+
+        if disease_probability >= 70:
+            risk_level = "High Risk"
+        elif disease_probability >= 40:
+            risk_level = "Moderate Risk"
+        else:
+            risk_level = "Low Risk"
+
         result = {
-            'prediction':        int(prediction),
-            'result_label':      'Heart Disease Detected' if prediction == 1 else 'No Heart Disease',
-            'probability_disease': round(float(probability[1]) * 100, 2),
-            'probability_no_disease': round(float(probability[0]) * 100, 2),
-            'risk_level': (
-                'High Risk'    if probability[1] >= 0.7 else
-                'Moderate Risk' if probability[1] >= 0.4 else
-                'Low Risk'
-            )
+            "prediction": prediction,
+            "result_label": (
+                "Heart Disease Detected"
+                if prediction == 1
+                else "No Heart Disease"
+            ),
+            "probability_disease": round(disease_probability, 2),
+            "probability_no_disease": round(no_disease_probability, 2),
+            "risk_level": risk_level
         }
 
-        return jsonify({'success': True, 'data': result})
+        return jsonify({
+            "success": True,
+            "data": result
+        })
 
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
 
-# ────────────────────────────────────────────────────────────
-@app.route('/model-info', methods=['GET'])
-def model_info():
-    return jsonify({
-        'model_type':   type(model).__name__,
-        'features':     FEATURES,
-        'total_features': len(FEATURES),
-        'description':  'Random Forest Classifier trained on Cleveland Heart Disease Dataset'
-    })
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
-# ────────────────────────────────────────────────────────────
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+# ==================================================
+# Run App
+# ==================================================
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=True
+    )

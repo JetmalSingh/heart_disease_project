@@ -3,7 +3,8 @@ import axios from 'axios'
 import { Activity, User, Zap, AlertTriangle, CheckCircle, XCircle, RefreshCw, Send, Info } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
-const API = 'https://jeetusingh.pythonanywhere.com'
+// const API = 'https://jeetusingh.pythonanywhere.com'
+const API = 'http://localhost:5000'
 
 const FIELDS = [
   { key: 'age',      label: 'Age',                    placeholder: '63',  type: 'number', tip: 'Patient age in years' },
